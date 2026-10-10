@@ -22,7 +22,7 @@ namespace PanaszKezelo.Api.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
-            modelBuilder.Entity("PanaszKezelo.Api.Models.Category", b =>
+            modelBuilder.Entity("PanaszKezelo.Api.Models.AssessmentItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -30,71 +30,119 @@ namespace PanaszKezelo.Api.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Description")
+                    b.Property<string>("AiClaim")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<string>("Name")
+                    b.Property<string>("AiConfidence")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.HasKey("Id");
+                    b.Property<string>("AiSourceDocument")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
-                    b.ToTable("Categories");
-                });
+                    b.Property<string>("AuditorNotes")
+                        .HasColumnType("longtext");
 
-            modelBuilder.Entity("PanaszKezelo.Api.Models.CompanyPolicy", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int>("CompanyAssessmentId")
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Content")
+                    b.Property<string>("CompanyInputOrEvidence")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<DateTime>("LastUpdated")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Title")
+                    b.Property<string>("ExpertCheckRequired")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.HasKey("Id");
-
-                    b.ToTable("CompanyPolicies");
-                });
-
-            modelBuilder.Entity("PanaszKezelo.Api.Models.Ticket", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AiSummary")
-                        .HasColumnType("longtext");
-
-                    b.Property<int?>("CategoryId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<bool>("IsAnonymous")
+                    b.Property<bool>("IsAuditorApproved")
                         .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("Nis2RequirementId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<string>("Title")
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyAssessmentId");
+
+                    b.HasIndex("Nis2RequirementId");
+
+                    b.ToTable("AssessmentItems");
+                });
+
+            modelBuilder.Entity("PanaszKezelo.Api.Models.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("CompanyAssessmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PerformedBy")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyAssessmentId");
+
+                    b.ToTable("AuditLogs");
+                });
+
+            modelBuilder.Entity("PanaszKezelo.Api.Models.CompanyAssessment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AnnualTurnoverEur")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<string>("CompanyName")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("EmployeeCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsNis2Affected")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Sector")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("SectorClassification")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaxNumber")
                         .IsRequired()
                         .HasColumnType("longtext");
 
@@ -103,14 +151,12 @@ namespace PanaszKezelo.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
-
                     b.HasIndex("UserId");
 
-                    b.ToTable("Tickets");
+                    b.ToTable("CompanyAssessments");
                 });
 
-            modelBuilder.Entity("PanaszKezelo.Api.Models.TicketComment", b =>
+            modelBuilder.Entity("PanaszKezelo.Api.Models.Nis2Requirement", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -118,28 +164,29 @@ namespace PanaszKezelo.Api.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<bool>("IsFromAi")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("Message")
+                    b.Property<string>("Code")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<string>("SenderName")
+                    b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int>("TicketId")
-                        .HasColumnType("int");
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("LegalReference")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TicketId");
-
-                    b.ToTable("TicketComments");
+                    b.ToTable("Nis2Requirements");
                 });
 
             modelBuilder.Entity("PanaszKezelo.Api.Models.User", b =>
@@ -153,15 +200,15 @@ namespace PanaszKezelo.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("Department")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("longtext");
 
                     b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("longtext");
 
@@ -173,47 +220,57 @@ namespace PanaszKezelo.Api.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("PanaszKezelo.Api.Models.Ticket", b =>
+            modelBuilder.Entity("PanaszKezelo.Api.Models.AssessmentItem", b =>
                 {
-                    b.HasOne("PanaszKezelo.Api.Models.Category", "Category")
-                        .WithMany("Tickets")
-                        .HasForeignKey("CategoryId");
+                    b.HasOne("PanaszKezelo.Api.Models.CompanyAssessment", "CompanyAssessment")
+                        .WithMany("AssessmentItems")
+                        .HasForeignKey("CompanyAssessmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
+                    b.HasOne("PanaszKezelo.Api.Models.Nis2Requirement", "Nis2Requirement")
+                        .WithMany()
+                        .HasForeignKey("Nis2RequirementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CompanyAssessment");
+
+                    b.Navigation("Nis2Requirement");
+                });
+
+            modelBuilder.Entity("PanaszKezelo.Api.Models.AuditLog", b =>
+                {
+                    b.HasOne("PanaszKezelo.Api.Models.CompanyAssessment", "CompanyAssessment")
+                        .WithMany("AuditLogs")
+                        .HasForeignKey("CompanyAssessmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CompanyAssessment");
+                });
+
+            modelBuilder.Entity("PanaszKezelo.Api.Models.CompanyAssessment", b =>
+                {
                     b.HasOne("PanaszKezelo.Api.Models.User", "User")
-                        .WithMany("Tickets")
+                        .WithMany("Assessments")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Category");
-
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("PanaszKezelo.Api.Models.TicketComment", b =>
+            modelBuilder.Entity("PanaszKezelo.Api.Models.CompanyAssessment", b =>
                 {
-                    b.HasOne("PanaszKezelo.Api.Models.Ticket", "Ticket")
-                        .WithMany("Comments")
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("AssessmentItems");
 
-                    b.Navigation("Ticket");
-                });
-
-            modelBuilder.Entity("PanaszKezelo.Api.Models.Category", b =>
-                {
-                    b.Navigation("Tickets");
-                });
-
-            modelBuilder.Entity("PanaszKezelo.Api.Models.Ticket", b =>
-                {
-                    b.Navigation("Comments");
+                    b.Navigation("AuditLogs");
                 });
 
             modelBuilder.Entity("PanaszKezelo.Api.Models.User", b =>
                 {
-                    b.Navigation("Tickets");
+                    b.Navigation("Assessments");
                 });
 #pragma warning restore 612, 618
         }

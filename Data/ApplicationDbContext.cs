@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using PanaszKezelo.Api.Models;
-using System.Net.Sockets;
 
 namespace PanaszKezelo.Api.Data
 {
@@ -12,9 +11,9 @@ namespace PanaszKezelo.Api.Data
         }
 
         public DbSet<User> Users { get; set; }
-        public DbSet<Category> Categories { get; set; }
-        public DbSet<Ticket> Tickets { get; set; }
-        public DbSet<TicketComment> TicketComments { get; set; }
-        public DbSet<CompanyPolicy> CompanyPolicies { get; set; }
+        public DbSet<CompanyAssessment> CompanyAssessments { get; set; }
+        public DbSet<Nis2Requirement> Nis2Requirements { get; set; }
+        public DbSet<AssessmentItem> AssessmentItems { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
     }
 }
