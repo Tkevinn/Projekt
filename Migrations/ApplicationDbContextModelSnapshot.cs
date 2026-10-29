@@ -187,6 +187,53 @@ namespace PanaszKezelo.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Nis2Requirements");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "NIS2-POL-01",
+                            Description = "A szervezetnek dokumentált, jóváhagyott és rendszeresen felülvizsgált kockázatkezelési módszertannal és információbiztonsági szabályzattal kell rendelkeznie.",
+                            Domain = "Kockázatelemzés és információbiztonsági szabályzatok",
+                            LegalReference = "2023. évi XXIII. tv. (Kibertantv.) 15. § (1) bek. a)",
+                            Title = "Kockázatelemzési és információs rendszerek biztonsági szabályzata"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "NIS2-INC-01",
+                            Description = "Kötelező az incidensek megelőzésére, észlelésére, kezelésére és az SZTFH / CSIRT felé történő kötelező 24/72 órás jelentésére vonatkozó eljárásrend kialakítása.",
+                            Domain = "Incidenskezelés",
+                            LegalReference = "2023. évi XXIII. tv. (Kibertantv.) 16. § / NIS2 23. cikk",
+                            Title = "Kiberbiztonsági incidensek kezelése és jelentése"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "NIS2-BCP-01",
+                            Description = "Rendszeres, titkosított és elkülönített (lehetőleg offline/offsite) biztonsági mentések készítése, valamint a visszaállítási képesség rendszeres tesztelése.",
+                            Domain = "Üzletmenet-folytonosság",
+                            LegalReference = "2023. évi XXIII. tv. 15. § (1) bek. c)",
+                            Title = "Biztonsági mentések és katasztrófa-helyreállítás (BCP/DRP)"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Code = "NIS2-SEC-01",
+                            Description = "Többtényezős hitelesítés (MFA) vagy folyamatos hitelesítési megoldások, védett hang-, video- és szöveges kommunikáció, valamint szükség esetén védett vészhelyzeti kommunikációs rendszerek alkalmazása.",
+                            Domain = "Hozzáférés-felügyelet és Hitelesítés",
+                            LegalReference = "NIS2 Irányelv 21. cikk (2) bek. j)",
+                            Title = "Többtényezős hitelesítés (MFA) és hozzáférés-kezelés"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Code = "NIS2-SUP-01",
+                            Description = "A közvetlen szállítók és szolgáltatók által jelentett biztonsági kockázatok felmérése és kezelése a szerződésekben.",
+                            Domain = "Ellátási lánc biztonsága",
+                            LegalReference = "NIS2 Irányelv 21. cikk (2) bek. d)",
+                            Title = "Beszállítói kockázatkezelés"
+                        });
                 });
 
             modelBuilder.Entity("PanaszKezelo.Api.Models.User", b =>
