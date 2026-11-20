@@ -126,6 +126,28 @@ app.MapPost("/api/questions/{questionId:int}/answer", async (int questionId, [Fr
     return Results.Ok(new { QuestionId = questionId, AuditeeAnswer = req.AuditeeAnswer, AiFollowUpQuestion = followUp });
 });
 
+// 3. AI-FUNKCIÓ: Szabályzat-kiegészítési Javaslat és Intézkedési Terv (Remediation) Generálása
+app.MapPost("/api/generate-remediation/{assessmentId:int}", async (int assessmentId, [FromBody] ApiKeyRequest keyReq) =>
+{
+    var assessment = AssessmentRepository.GetAssessmentById(DbConnectionString, assessmentId);
+    if (assessment == null)
+        return Results.NotFound(new { error = "Az értékelés nem található." });
+
+    var requirement = KnowledgeBaseService.GetRequirementById(DbConnectionString, assessment.RequirementId);
+    if (requirement == null)
+        return Results.NotFound(new { error = "A kapcsolódó követelmény nem található." });
+
+    string auditor = string.IsNullOrWhiteSpace(keyReq.AuditorName) ? "Auditor" : keyReq.AuditorName.Trim();
+
+    var remediation = await GeminiAiService.GenerateRemediationPlanAsync(requirement, assessment, keyReq.ApiKey);
+
+    AuditLogger.Log(DbConnectionString, "AI_REMEDIATION_GENERATED", $"AI_AGENT [{auditor}]",
+        $"AI szabályzat-kiegészítési javaslatot és intézkedési tervet generált a(z) #{assessmentId} értékeléshez ({assessment.OrganizationName}).",
+        JsonSerializer.Serialize(remediation));
+
+    return Results.Ok(remediation);
+});
+
 // Szakértői felülvizsgálat és végső minősítés jóváhagyása (Human-in-the-loop)
 app.MapPost("/api/assessments/{assessmentId:int}/verify", (int assessmentId, [FromBody] ExpertVerificationRequest req) =>
 {
@@ -168,6 +190,18 @@ app.MapGet("/api/logs/download/txt", (string? user) =>
     byte[] txtBytes = AuditLogger.ExportLogsAsTxtBytes(DbConnectionString);
     string fileName = $"nis2_eredmeny_es_esemenynaplo_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
     return Results.File(txtBytes, "text/plain; charset=utf-8", fileName);
+});
+
+// EREDMÉNY- ÉS ESEMÉNYNAPLÓ LETÖLTÉSE PDF FORMÁTUMBAN (Nyomtatható / PDF mentés nézet)
+app.MapGet("/api/logs/download/pdf", (string? user) =>
+{
+    string actor = string.IsNullOrWhiteSpace(user) ? "Auditor" : user.Trim();
+    AuditLogger.Log(DbConnectionString, "AUDITLOG_DOWNLOAD_PDF", actor,
+        "Letöltötte / megnyitotta PDF mentésre a teljes eredmény- és eseménynaplót.",
+        JsonSerializer.Serialize(new { Format = "PDF", DownloadedBy = actor, Time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") }));
+
+    string html = AuditLogger.ExportLogsAsPrintableHtml(DbConnectionString, actor);
+    return Results.Content(html, "text/html; charset=utf-8");
 });
 
 // Exportálható HTML/Nyomtatható Audit-előkészítő Jelentés
@@ -242,6 +276,21 @@ public class AiComplianceResult
 
     [JsonPropertyName("suggestedStatus")]
     public string SuggestedStatus { get; set; } = "Részben felel meg";
+}
+
+public class RemediationPlanDto
+{
+    [JsonPropertyName("suggestedPolicyText")]
+    public string SuggestedPolicyText { get; set; } = "";
+
+    [JsonPropertyName("actionSteps")]
+    public List<string> ActionSteps { get; set; } = new();
+
+    [JsonPropertyName("responsibleRole")]
+    public string ResponsibleRole { get; set; } = "";
+
+    [JsonPropertyName("estimatedDeadline")]
+    public string EstimatedDeadline { get; set; } = "";
 }
 
 public class GeneratedQuestionDto
@@ -713,7 +762,7 @@ public static class AssessmentRepository
 }
 
 // ============================================================================
-// 5. ESEMÉNY- ÉS DÖNTÉSNAPLÓZÓ SZOLGÁLTATÁS + NAPLÓLETÖLTÉS (CSV / TXT)
+// 5. ESEMÉNY- ÉS DÖNTÉSNAPLÓZÓ SZOLGÁLTATÁS + NAPLÓLETÖLTÉS (CSV / TXT / PDF)
 // ============================================================================
 
 public static class AuditLogger
@@ -801,6 +850,67 @@ public static class AuditLogger
         }
 
         return Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    public static string ExportLogsAsPrintableHtml(string connStr, string exportedBy)
+    {
+        var logs = GetLogs(connStr, 10000);
+        var rows = new StringBuilder();
+        foreach (var l in logs)
+        {
+            rows.AppendLine($"""
+                <tr>
+                    <td>#{l.Id}</td>
+                    <td>{System.Net.WebUtility.HtmlEncode(l.Timestamp)}</td>
+                    <td><strong>{System.Net.WebUtility.HtmlEncode(l.Actor)}</strong></td>
+                    <td><code>{System.Net.WebUtility.HtmlEncode(l.EventType)}</code></td>
+                    <td>{System.Net.WebUtility.HtmlEncode(l.Summary)}</td>
+                </tr>
+                """);
+        }
+
+        return $$"""
+            <!DOCTYPE html>
+            <html lang='hu'>
+            <head>
+                <meta charset='UTF-8'>
+                <title>NIS2-AuditGuard AI - Eredmény- és Eseménynapló (PDF)</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 30px; color: #1e293b; font-size: 13px; }
+                    h1 { color: #0f172a; margin-bottom: 6px; font-size: 20px; }
+                    .meta { color: #475569; margin-bottom: 18px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #cbd5e1; padding: 7px 9px; text-align: left; vertical-align: top; }
+                    th { background: #e2e8f0; font-weight: bold; }
+                    tr:nth-child(even) { background: #f8fafc; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body onload="window.print()">
+                <button class="no-print" onclick="window.print()" style="padding:8px 14px; margin-bottom:14px; cursor:pointer;">🖨️ Nyomtatás / Mentés PDF-ként</button>
+                <h1>NIS2-AuditGuard AI – Eredmény- és Eseménynapló</h1>
+                <div class="meta">
+                    <strong>Exportálás időpontja:</strong> {{DateTime.Now:yyyy-MM-dd HH:mm:ss}} |
+                    <strong>Exportálta:</strong> {{System.Net.WebUtility.HtmlEncode(exportedBy)}} |
+                    <strong>Összes bejegyzés:</strong> {{logs.Count}} db
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:55px;">ID</th>
+                            <th style="width:145px;">Időpont</th>
+                            <th style="width:210px;">Felhasználó / Aktor</th>
+                            <th style="width:180px;">Esemény típusa</th>
+                            <th>Tevékenység és eredmény leírása</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{rows}}
+                    </tbody>
+                </table>
+            </body>
+            </html>
+            """;
     }
 
     private static string EscapeCsv(string value)
@@ -967,6 +1077,62 @@ public static class GeminiAiService
         }
 
         return $"Értékelés: A megadott válasz (\"{answer}\") rögzítésre került, de önmagában a szóbeli nyilatkozat nem minősül auditbizonyítéknak. Követő kérdés: Kérjük, mutassa be a folyamat tényleges megtörténtét igazoló naplóbejegyzést vagy jegyzőkönyvet ({question.ExpectedEvidence}) az elmúlt negyedévből!";
+    }
+
+    public static async Task<RemediationPlanDto> GenerateRemediationPlanAsync(
+        RequirementDetailDto reqDetail, SavedAssessmentDto assessment, string? userApiKey)
+    {
+        string apiKey = !string.IsNullOrWhiteSpace(userApiKey)
+            ? userApiKey
+            : Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+
+        string prompt = $"""
+            Te egy NIS2 kiberbiztonsági tanácsadó AI asszisztens vagy.
+            A vizsgált dokumentum ('{assessment.DocumentTitle}') hiányosságokat mutat a(z) {reqDetail.ReqCode} ({reqDetail.Domain}) követelményhez képest.
+            Készíts konkrét, azonnal beilleszthető szabályzat-kiegészítési szövegjavaslatot és 3 lépéses intézkedési tervet!
+
+            SZERVEZET ÉS IT KÖRNYEZET: {assessment.OrganizationName} ({assessment.ItEnvironment})
+            JOGSZABÁLYI KÖVETELMÉNY: {reqDetail.RegulationCode} - {reqDetail.Description}
+            FELTÁRT HIÁNYOSSÁGOK: {assessment.AiResult.Uncertainties}
+
+            Válaszolj kizárólag JSON objektumként a következő mezőkkel:
+            - suggestedPolicyText (string: konkrét, hivatalos magyar nyelvű szabályzati szakasz tervezet)
+            - actionSteps (string tömb: 3 konkrét végrehajtandó lépés)
+            - responsibleRole (string: felelős szerepkör)
+            - estimatedDeadline (string: javasolt végrehajtási határidő)
+            """;
+
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            try
+            {
+                string jsonResponse = await CallGeminiApiAsync(apiKey, prompt);
+                var parsed = JsonSerializer.Deserialize<RemediationPlanDto>(jsonResponse, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (parsed != null && !string.IsNullOrWhiteSpace(parsed.SuggestedPolicyText))
+                    return parsed;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Gemini API intézkedési terv figyelmeztetés: {ex.Message}");
+            }
+        }
+
+        var mandatoryCtrls = reqDetail.Controls.Where(c => c.IsMandatoryByLaw).ToList();
+        return new RemediationPlanDto
+        {
+            SuggestedPolicyText = $"[TERVEZET – {reqDetail.ReqCode} KIEGÉSZÍTÉS] A(z) {assessment.OrganizationName} a(z) {reqDetail.RegulationCode} előírásainak megfelelően kötelezően előírja: {string.Join("; ", mandatoryCtrls.Select(c => $"{c.ControlName} ({c.ProcedureSuggested})"))}. A végrehajtást az érintett felelősök ({reqDetail.AffectedRoles}) dokumentáltan és visszakereshetően rögzítik a(z) {assessment.ItEnvironment} környezetben.",
+            ActionSteps = new List<string>
+            {
+                $"1. A '{assessment.DocumentTitle}' dokumentum kiegészítése a fenti jogszabályi rendelkezésekkel és vezetői jóváhagyása.",
+                $"2. A technikai kontrollok élesítése a(z) {assessment.ItEnvironment} környezetben ({string.Join(", ", mandatoryCtrls.Select(c => c.ControlName))}).",
+                $"3. Auditbizonyítékok összegyűjtése és archiválása: {string.Join(", ", reqDetail.Controls.SelectMany(c => c.Evidences).Take(2))}."
+            },
+            ResponsibleRole = reqDetail.AffectedRoles,
+            EstimatedDeadline = "30 napon belül (Audit előtti felkészülési határidő)"
+        };
     }
 
     private static async Task<string> CallGeminiApiAsync(string apiKey, string prompt)
@@ -1270,13 +1436,17 @@ public static class WebUiTemplate
                 </button>
             </div>
 
-            <!-- EREDMÉNY- ÉS ESEMÉNYNAPLÓ LETÖLTÉSI GOMBOKKAL -->
+            <!-- EREDMÉNY- ÉS ESEMÉNYNAPLÓ LEGÖRDÜLŐ MENÜVEL -->
             <div class="card p-4">
                 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                     <h6 class="mb-0 fw-bold">📜 Eredmény- és Eseménynapló (Audit Log)</h6>
-                    <div class="d-flex gap-1">
-                        <button class="btn btn-success btn-sm" onclick="downloadLog('csv')" title="Megnyitható Microsoft Excelben">📥 CSV (Excel)</button>
-                        <button class="btn btn-dark btn-sm" onclick="downloadLog('txt')" title="Részletes szöveges naplófájl">📥 TXT (.log)</button>
+                    <div class="d-flex gap-1 align-items-center">
+                        <select id="logExportFormat" class="form-select form-select-sm" style="width: auto;" title="Letöltési formátum kiválasztása">
+                            <option value="pdf">PDF (Nyomtatható)</option>
+                            <option value="csv">CSV (Excel)</option>
+                            <option value="txt">TXT (.log)</option>
+                        </select>
+                        <button class="btn btn-success btn-sm" onclick="downloadSelectedLog()" title="Kiválasztott formátum letöltése">📥 Letöltés</button>
                         <button class="btn btn-outline-secondary btn-sm" onclick="loadLogs()">🔄</button>
                     </div>
                 </div>
@@ -1377,7 +1547,7 @@ public static class WebUiTemplate
                     </div>
                 </div>
 
-                <div class="card p-4">
+                <div class="card p-4 mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h5 class="mb-0">🎤 2. AI-Funkció: Kategorizált Audit- és Ellenőrzési Kérdések</h5>
@@ -1388,6 +1558,21 @@ public static class WebUiTemplate
                         </button>
                     </div>
                     <div id="questionsContainer"></div>
+                </div>
+
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-0">🛠️ 3. AI-Funkció: Szabályzat-kiegészítés & Intézkedési Terv</h5>
+                            <small class="text-muted">Automatikus szövegtervezet és akcióterv a feltárt hiányosságok megszüntetésére</small>
+                        </div>
+                        <button class="btn btn-info text-white fw-semibold btn-sm" onclick="generateRemediation()" id="btnGenRem">
+                            ✨ Javaslat Generálása AI-val
+                        </button>
+                    </div>
+                    <div id="remediationContainer">
+                        <div class="text-muted small">Kattints a 'Javaslat Generálása AI-val' gombra a szabályzat-kiegészítési tervezet és az intézkedési terv elkészítéséhez!</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1442,9 +1627,19 @@ async function performLogout() {
     loadLogs();
 }
 
+function downloadSelectedLog() {
+    const format = document.getElementById('logExportFormat').value;
+    downloadLog(format);
+}
+
 function downloadLog(format) {
     const userParam = encodeURIComponent(loggedInAuditor || 'Auditor');
-    window.location.href = `/api/logs/download/${format}?user=${userParam}`;
+    const url = `/api/logs/download/${format}?user=${userParam}`;
+    if (format === 'pdf') {
+        window.open(url, '_blank');
+    } else {
+        window.location.href = url;
+    }
     setTimeout(loadLogs, 800);
 }
 
@@ -1521,6 +1716,7 @@ function displayAssessment(ai, req) {
     document.getElementById('resUncertainties').innerText = ai.uncertainties;
     document.getElementById('resVerify').innerText = ai.whatExpertMustVerify;
     document.getElementById('questionsContainer').innerHTML = `<div class="text-muted small">Kattints az 'Auditkérdések Generálása AI-val' gombra a célzott kérdéssor előállításához!</div>`;
+    document.getElementById('remediationContainer').innerHTML = `<div class="text-muted small">Kattints a 'Javaslat Generálása AI-val' gombra a szabályzat-kiegészítési tervezet és az intézkedési terv elkészítéséhez!</div>`;
 }
 
 async function saveExpertDecision() {
@@ -1557,6 +1753,40 @@ async function generateQuestions() {
     btn.disabled = false;
     btn.innerText = '⚡ Auditkérdések Generálása AI-val';
     renderQuestions(questions);
+    loadLogs();
+}
+
+async function generateRemediation() {
+    if (!currentAssessmentId) return;
+    const btn = document.getElementById('btnGenRem');
+    btn.disabled = true;
+    btn.innerText = '⏳ Javaslat generálása...';
+
+    const res = await fetch(`/api/generate-remediation/${currentAssessmentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            apiKey: document.getElementById('geminiKey').value,
+            auditorName: loggedInAuditor
+        })
+    });
+    const rem = await res.json();
+    btn.disabled = false;
+    btn.innerText = '✨ Javaslat Generálása AI-val';
+
+    const stepsHtml = (rem.actionSteps || []).map(s => `<li>${s}</li>`).join('');
+    document.getElementById('remediationContainer').innerHTML = `
+        <div class="p-3 bg-light rounded border small">
+            <div class="whitebox-label mb-1">📝 Javasolt szabályzat-kiegészítési szövegtervezet:</div>
+            <div class="p-2 bg-white border rounded fst-italic mb-2">${rem.suggestedPolicyText}</div>
+            <div class="whitebox-label mb-1">📋 Intézkedési lépések:</div>
+            <ul class="mb-2 ps-3">${stepsHtml}</ul>
+            <div class="d-flex justify-content-between text-secondary">
+                <span>👤 <strong>Felelős:</strong> ${rem.responsibleRole}</span>
+                <span>⏱️ <strong>Javasolt határidő:</strong> ${rem.estimatedDeadline}</span>
+            </div>
+        </div>
+    `;
     loadLogs();
 }
 
